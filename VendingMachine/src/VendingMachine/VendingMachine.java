@@ -1,11 +1,15 @@
 package VendingMachine;
 
+import java.net.Socket;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.*;
 
 public class VendingMachine implements Runnable {
+	
 	private enum Coin {
 	    PENNY(1.0), NICKEL(5.0), DIME(10.0), QUARTER(25.0), DOLLAR(100.0);
 	    Coin(double value) { this.value = value; }
@@ -24,6 +28,16 @@ public class VendingMachine implements Runnable {
 	private static final String EXIT = "Exit"; 
 	private DrinkChamber drinkChamber;
 	private double amountPaid; 
+	private Socket clientSocket = null;
+	private String serverName = null;
+	private InputStream input = null;
+	private OutputStream output = null;
+	
+	public VendingMachine(Socket clientSocket, String serverName) {
+		this.clientSocket = clientSocket;
+		this.serverName = serverName;
+		this.powerUpVendingMechine();
+	}
 	
 	public void setAmountPaid(double amountPaid) {
 		this.amountPaid = amountPaid;
@@ -35,18 +49,28 @@ public class VendingMachine implements Runnable {
 	}
 	
 	private void displayMenu() {
-		System.out.println("Please select your drink from the menu:\n");
-		System.out.println("\t" + SelectionMenu.COLA + "\t\tprice: [" + drinkChamber.cola.price + "]cents" + "\tstill have: [" + drinkChamber.getColaCount().toString() + "]can\n" +
+		try {
+			output.write(("Please select your drink from the menu:\n").getBytes());
+			output.write(("\t" + SelectionMenu.COLA + "\t\tprice: [" + drinkChamber.cola.price + "]cents" + "\tstill have: [" + drinkChamber.getColaCount().toString() + "]can\n" +
 							"\t" + SelectionMenu.COFFEE + "\t\tprice: [" + drinkChamber.coffee.price + "]cents" + "\tstill have: [" + drinkChamber.getCoffeeCount().toString() + "]can\n" +
 							"\t" + SelectionMenu.ORANGE_JUICE + "\tprice: [" + drinkChamber.oj.price + "]cents" + "\tstill have: [" +  drinkChamber.getOJCount().toString()+ "]can\n" +
 							"\t" + "QUIT\n\n" +
-							"Enter:");
+							"Enter:").getBytes());
+		} catch (IOException e) {};
 	}
 	
 	public void run() {
 		do {
-			setAmountPaid(0.0);
-			displayMenu();
+			try {
+				input = this.clientSocket.getInputStream();
+				output = this.clientSocket.getOutputStream();
+				output.write(("HTTP 200 - server:" + this.serverName + " started at " + System.currentTimeMillis()).getBytes());
+				setAmountPaid(0.0);
+				displayMenu();
+				output.flush();
+			} catch (IOException e) {
+				System.out.println("Error in socket io.");
+			}
 		} while (!captureInputAndRepond().equals("Exit"));	
 	}
 	
@@ -60,7 +84,9 @@ public class VendingMachine implements Runnable {
 			else if (coin.equals("QUARTER")) { amountPaid += Coin.QUARTER.value; }
 			else if (coin.equals("DOLLAR")) { amountPaid += Coin.DOLLAR.value; }
 		}
-		System.out.println("You have paid " + amountPaid + " cents");
+		try {
+			output.write(("You have paid " + amountPaid + " cents").getBytes());
+		} catch (IOException e) {};
 		return amountPaid - price;
 	}
 	
@@ -71,7 +97,7 @@ public class VendingMachine implements Runnable {
 				price = drinkChamber.cola.price;
 				if (paymentOK) { drinkChamber.takeACola(); } 
 				else {
-					System.out.printf("The price is %d cents, please put in the coin.\n", (int)drinkChamber.cola.price);
+					output.write(("The price is " + drinkChamber.cola.price + " cents, please put in the coin.").getBytes());
 					captureMoney(selection, price);
 				}
 				break;
@@ -79,7 +105,7 @@ public class VendingMachine implements Runnable {
 				price = drinkChamber.coffee.price;
 				if (paymentOK) { drinkChamber.takeACoffee(); } 
 				else {
-					System.out.printf("The price is %d cents, please put in the coin.\n", (int)drinkChamber.coffee.price);
+					output.write(("The price is " + drinkChamber.coffee.price + " cents, please put in the coin.").getBytes());
 					captureMoney(selection, price);
 				}
 				break;
@@ -87,7 +113,7 @@ public class VendingMachine implements Runnable {
 				price = drinkChamber.oj.price;
 				if (paymentOK) { drinkChamber.takeAOJ(); } 
 				else {
-					System.out.printf("The price is %d cents, please put in the coin.\n", (int)drinkChamber.oj.price);					
+					output.write(("The price is " + drinkChamber.oj.price + " cents, please put in the coin").getBytes());				
 					captureMoney(selection, price);
 				}
 				break;
@@ -97,38 +123,40 @@ public class VendingMachine implements Runnable {
 	}
 	
 	private void displayReturningCoins(double change) {
-		System.out.println("Returning coin: " );
-		if ( change / Coin.DOLLAR.value >= 1 ) { 
-			int numDollar = (int)change / (int)Coin.DOLLAR.value;
-			change = change - (numDollar * Coin.DOLLAR.value);
-			System.out.println(numDollar + " dollar "); 
-		}
-		if ( change / Coin.QUARTER.value >= 1 ) { 
-			int numQuarter = (int)change / (int)Coin.QUARTER.value;
-			change = change - (numQuarter * Coin.QUARTER.value);
-			System.out.println(numQuarter + " quarter "); 
-		}
-		if ( change / Coin.DIME.value >= 1 ) { 
-			int numDime = (int)change / (int)Coin.DIME.value;
-			change = change - (numDime * Coin.DIME.value);
-			System.out.println(numDime + " dime ");
-		} 
-		if ( change / Coin.NICKEL.value >= 1 ) { 	
-			int numNickel = (int)change / (int)Coin.NICKEL.value;
-			change = change - (numNickel * Coin.NICKEL.value);
-			System.out.println(numNickel + " nickel "); 
-		} 
-		if ( change / Coin.PENNY.value >= 1 ) { 
-			int numPenny = (int)change / (int)Coin.PENNY.value;
-			change = change - (numPenny * Coin.PENNY.value);
-			System.out.println(numPenny + " penny ");	
-		}	
+		try {
+			output.write(("Returning coin: " ).getBytes());
+			if ( change / Coin.DOLLAR.value >= 1 ) { 
+				int numDollar = (int)change / (int)Coin.DOLLAR.value;
+				change = change - (numDollar * Coin.DOLLAR.value);
+				output.write((numDollar + " dollar ").getBytes());
+			}
+			if ( change / Coin.QUARTER.value >= 1 ) { 
+				int numQuarter = (int)change / (int)Coin.QUARTER.value;
+				change = change - (numQuarter * Coin.QUARTER.value);
+				output.write((numQuarter + " quarter ").getBytes());
+			}
+			if ( change / Coin.DIME.value >= 1 ) { 
+				int numDime = (int)change / (int)Coin.DIME.value;
+				change = change - (numDime * Coin.DIME.value);
+				output.write((numDime + " dime ").getBytes());
+			} 
+			if ( change / Coin.NICKEL.value >= 1 ) { 	
+				int numNickel = (int)change / (int)Coin.NICKEL.value;
+				change = change - (numNickel * Coin.NICKEL.value);
+				output.write((numNickel + " nickel ").getBytes());
+			} 
+			if ( change / Coin.PENNY.value >= 1 ) { 
+				int numPenny = (int)change / (int)Coin.PENNY.value;
+				change = change - (numPenny * Coin.PENNY.value);
+				output.write((numPenny + " penny ").getBytes());	
+			}
+		} catch (IOException e) {};
 	}
 	
 	private void captureMoney(String selection, double price) throws Exception {
 		String amount = null;
 		
-		BufferedReader coins = new BufferedReader(new InputStreamReader(System.in));
+		BufferedReader coins = new BufferedReader(new InputStreamReader(input));
 		try {
 			amount = coins.readLine();
 			if (amount != null) {
@@ -138,7 +166,7 @@ public class VendingMachine implements Runnable {
 					if (change > 0.0) {
 						System.out.println("Your change is: " + change + " cents");
 						displayReturningCoins(change);
-						System.out.println("Thank you for your business, see you again! Exiting....\n\n\n\n");
+						output.write(("Thank you for your business, see you again! Exiting....").getBytes());
 					}
 				} else {
 					System.out.println("You did not put enough money, please put in more coin.");
@@ -156,8 +184,7 @@ public class VendingMachine implements Runnable {
 	 */
 	private String captureInputAndRepond() {
 		String selection = null;
-		
-		BufferedReader choosen = new BufferedReader(new InputStreamReader(System.in));
+		BufferedReader choosen = new BufferedReader(new InputStreamReader(input));
 		try {
 			selection = choosen.readLine();	
 		} catch (IOException e) {
@@ -228,14 +255,5 @@ public class VendingMachine implements Runnable {
 		public Integer getOJCount() {
 			return ojContainer.getItemCount(oj);
 		}
-	}
-	/**
-	 * @param args
-	 */
-	public static void main(String[] args) {
-		VendingMachine vm = new VendingMachine();
-		Thread t = new Thread(vm);
-		vm.powerUpVendingMechine();
-		t.start();
 	}
 }
