@@ -5,7 +5,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.*;
 
-public class VendingMachine {
+public class VendingMachine implements Runnable {
 	private enum Coin {
 	    PENNY(1.0), NICKEL(5.0), DIME(10.0), QUARTER(25.0), DOLLAR(100.0);
 	    Coin(double value) { this.value = value; }
@@ -41,6 +41,13 @@ public class VendingMachine {
 							"\t" + SelectionMenu.ORANGE_JUICE + "\tprice: [" + drinkChamber.oj.price + "]cents" + "\tstill have: [" +  drinkChamber.getOJCount().toString()+ "]can\n" +
 							"\t" + "QUIT\n\n" +
 							"Enter:");
+	}
+	
+	public void run() {
+		do {
+			setAmountPaid(0.0);
+			displayMenu();
+		} while (!captureInputAndRepond().equals("Exit"));	
 	}
 	
 	private double calculateChange(double price, String insertedCoins) {
@@ -131,7 +138,7 @@ public class VendingMachine {
 					if (change > 0.0) {
 						System.out.println("Your change is: " + change + " cents");
 						displayReturningCoins(change);
-						System.out.println("Thank you for your business, you see again! Exiting....\n\n\n\n");
+						System.out.println("Thank you for your business, see you again! Exiting....\n\n\n\n");
 					}
 				} else {
 					System.out.println("You did not put enough money, please put in more coin.");
@@ -177,7 +184,7 @@ public class VendingMachine {
 		return ENGAGING;
 	}
 	
-	private class DrinkChamber {
+	class DrinkChamber {
 		Container<Cola, Integer> colaContainer = new Container<Cola, Integer>();
 		Container<Coffee, Integer> coffeeContainer = new Container<Coffee, Integer>();
 		Container<OrangeJuice, Integer> ojContainer = new Container<OrangeJuice, Integer>();
@@ -227,12 +234,8 @@ public class VendingMachine {
 	 */
 	public static void main(String[] args) {
 		VendingMachine vm = new VendingMachine();
+		Thread t = new Thread(vm);
 		vm.powerUpVendingMechine();
-		while(true) {
-			vm.setAmountPaid(0.0);
-			vm.displayMenu();
-			if (vm.captureInputAndRepond().equals("Exit"))
-				break;
-		}
+		t.start();
 	}
 }
