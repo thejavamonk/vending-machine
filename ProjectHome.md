@@ -1,0 +1,1 @@
+This project is mainly to demonstrate the use of Generic Type in Java, while the code is being written to model a real life vending machine.
